@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/primary.swiftdeps"
+  },
+  "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/Sources/PlaudPlugin/PlaudSdkPlugin.swift": {
+    "dependencies": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/PlaudSdkPlugin.d",
+    "object": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/PlaudSdkPlugin.swift.o",
+    "swiftmodule": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/PlaudSdkPlugin~partial.swiftmodule",
+    "swift-dependencies": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/PlaudSdkPlugin.swiftdeps",
+    "diagnostics": "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/PlaudSdkPlugin.dia"
+  }
+}

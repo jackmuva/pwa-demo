@@ -54,3 +54,8 @@ description the app crashes on first Bluetooth use. Add `bluetooth-central` to
 To build and run: `npx cap open ios`, set a signing Team in Xcode, and run on a **physical
 device** (BLE does not work in the Simulator). Because `server.url` points at Vercel, the
 app runs whatever is currently deployed there — deploy web changes before testing on device.
+
+**3. Running on XCode**
+```bash
+npx cap open ios
+```

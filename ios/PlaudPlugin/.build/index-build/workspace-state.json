@@ -1,0 +1,123 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "path" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/artifacts/capacitor-swift-pm/Cordova/Cordova.xcframework",
+        "source" : {
+          "checksum" : "76172be2ff6f09c05b3fdd6e48b08f79f070d1c50c108a4539f31b24f3b3c838",
+          "type" : "remote",
+          "url" : "https://github.com/ionic-team/capacitor-swift-pm/releases/download/8.4.1/Cordova.xcframework.zip"
+        },
+        "targetName" : "Cordova"
+      },
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "path" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/artifacts/capacitor-swift-pm/Capacitor/Capacitor.xcframework",
+        "source" : {
+          "checksum" : "04665ab264967643e092a71740b0d619b087bc8949e71dacd410d10cc5e34f08",
+          "type" : "remote",
+          "url" : "https://github.com/ionic-team/capacitor-swift-pm/releases/download/8.4.1/Capacitor.xcframework.zip"
+        },
+        "targetName" : "Capacitor"
+      },
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "plaudplugin",
+          "kind" : "root",
+          "location" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin",
+          "name" : "PlaudPlugin"
+        },
+        "path" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/Frameworks/PlaudDeviceBasicSDK.xcframework",
+        "source" : {
+          "type" : "local"
+        },
+        "targetName" : "PlaudDeviceBasicSDK"
+      },
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "plaudplugin",
+          "kind" : "root",
+          "location" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin",
+          "name" : "PlaudPlugin"
+        },
+        "path" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/Frameworks/PlaudBleSDK.xcframework",
+        "source" : {
+          "type" : "local"
+        },
+        "targetName" : "PlaudBleSDK"
+      },
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "plaudplugin",
+          "kind" : "root",
+          "location" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin",
+          "name" : "PlaudPlugin"
+        },
+        "path" : "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/Frameworks/PlaudWiFiSDK.xcframework",
+        "source" : {
+          "type" : "local"
+        },
+        "targetName" : "PlaudWiFiSDK"
+      }
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "capacitor-swift-pm",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
+          "name" : "capacitor-swift-pm"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "2231987d85b8b0b289320b1d0947b4ae8345cde4",
+            "version" : "8.4.1"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "capacitor-swift-pm"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}

@@ -1,0 +1,3 @@
+module PlaudPlugin {
+    header "/Users/jackmu/projects/plaud-repos/pwa-demo/ios/PlaudPlugin/.build/index-build/arm64-apple-macosx/debug/PlaudPlugin.build/include/PlaudPlugin-Swift.h"
+}
