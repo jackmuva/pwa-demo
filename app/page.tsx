@@ -9,6 +9,7 @@ import {
 import useSWR from "swr";
 
 const PLAUD_DOMAIN = "platform-us.plaud.ai";
+const USER_ID = "jackmu";
 
 export default function Home() {
   const [devices, setDevices] = useState<PlaudScanDevice[]>([]);
@@ -22,7 +23,7 @@ export default function Home() {
   const { data } = useSWR("api/user-token", async () => {
     const tokenRes = await fetch(`${window.location.origin}/api/user-token`, {
       method: "POST",
-      body: JSON.stringify({ user_id: "jackmu" }),
+      body: JSON.stringify({ user_id: USER_ID }),
     });
     const { access_token } = await tokenRes.json();
     return { access_token: access_token as string };
@@ -41,9 +42,15 @@ export default function Home() {
             return [...map.values()];
           });
         }),
-        await PlaudSdk.addListener("scanTimeout", () => setStatus("scan timed out")),
-        await PlaudSdk.addListener("connectState", ({ connected }) => {
-          setStatus(connected ? "connected" : "disconnected");
+        await PlaudSdk.addListener("scanTimeout", ({ reason }) =>
+          setStatus(
+            reason === "bluetoothNotPoweredOn"
+              ? "Bluetooth is off or permission was denied"
+              : "scan timed out",
+          ),
+        ),
+        await PlaudSdk.addListener("connectState", ({ connected, failed }) => {
+          setStatus(connected ? "connected" : failed ? "connection failed" : "disconnected");
           // Once connected, pull the on-device recording list.
           if (connected) PlaudSdk.getFileList({ startSessionId: 0 }).catch(() => {});
         }),
@@ -84,7 +91,11 @@ export default function Home() {
     try {
       if (!initedRef.current) {
         setStatus("initializing SDK…");
-        await PlaudSdk.initSDK({ userAccessToken: token, customDomain: PLAUD_DOMAIN });
+        await PlaudSdk.initSDK({
+          userAccessToken: token,
+          customDomain: PLAUD_DOMAIN,
+          userId: USER_ID,
+        });
         initedRef.current = true;
       }
       setStatus("scanning…");

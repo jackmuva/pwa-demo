@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import PlaudDeviceBasicSDK
+import PlaudBleSDK
 
 /// Capacitor bridge over Plaud's native iOS SDK.
 ///
@@ -40,6 +41,17 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
     /// are deallocated before the SDK finishes. Touched only on the main queue.
     private var exportCallbacks: Set<ExportCallbackBridge> = []
 
+    /// App-level user identifier, remembered from `initSDK`. The native app passes this
+    /// as the `deviceToken` on every connect — it's what binds the device to the user
+    /// during the handshake — so we default to it when JS doesn't pass one explicitly.
+    private var userId: String?
+
+    /// Poll counter for the Bluetooth power-on gate (see `attemptScanWhenReady`).
+    private var scanReadyAttempts = 0
+    /// True while a scan is desired. Cleared by `stopScan`/`connectBleDevice` so a pending
+    /// power-on poll doesn't fire a stray scan after the user moved on. Main queue only.
+    private var isScanning = false
+
     // MARK: - Connection lifecycle
 
     @objc func initSDK(_ call: CAPPluginCall) {
@@ -51,7 +63,9 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
             call.reject("customDomain is required (domain only, no https://)")
             return
         }
+        let userId = call.getString("userId")
         DispatchQueue.main.async {
+            self.userId = userId
             let agent = PlaudDeviceAgent.shared
             agent.delegate = self
             agent.initSDK(userAccessToken: token, customDomain: domain)
@@ -61,13 +75,40 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
 
     @objc func startScan(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            PlaudDeviceAgent.shared.startScan()
+            // CoreBluetooth silently drops scanForPeripherals until the central manager
+            // reaches .poweredOn — which happens asynchronously after initSDK and is gated
+            // on the first-launch Bluetooth permission prompt. Firing startScan() before
+            // then discovers nothing, so gate the real scan on the power-on state (as the
+            // native DeviceManager does).
+            self.isScanning = true
+            self.scanReadyAttempts = 0
+            self.attemptScanWhenReady()
             call.resolve()
+        }
+    }
+
+    /// Fires the SDK scan once Bluetooth is powered on, polling ~18s to cover the
+    /// cold-start power-on delay and the first-launch permission prompt. Main queue only.
+    private func attemptScanWhenReady() {
+        // Bail if scanning was cancelled (stopScan / connect) while we were waiting.
+        guard isScanning else { return }
+        if BleAgent.shared.isPoweredOn {
+            PlaudDeviceAgent.shared.startScan()
+            return
+        }
+        scanReadyAttempts += 1
+        if scanReadyAttempts > 60 {
+            self.notify("scanTimeout", ["reason": "bluetoothNotPoweredOn"])
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.attemptScanWhenReady()
         }
     }
 
     @objc func stopScan(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.isScanning = false
             PlaudDeviceAgent.shared.stopScan()
             call.resolve()
         }
@@ -79,8 +120,12 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
     @objc func connectBleDevice(_ call: CAPPluginCall) {
         let uuid = call.getString("uuid")
         let serial = call.getString("serialNumber")
-        let token = call.getString("deviceToken")
+        // The native app always connects with a device token (the app-level userId) so the
+        // handshake binds the device to the user. Prefer an explicit token, else fall back
+        // to the userId remembered from initSDK.
+        let token = call.getString("deviceToken") ?? self.userId
         DispatchQueue.main.async {
+            self.isScanning = false
             guard let device = self.lookupDevice(uuid: uuid, serialNumber: serial) else {
                 call.reject("Unknown device — scan first, then connect by uuid or serialNumber")
                 return
@@ -196,8 +241,15 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
     }
 
     public func bleConnectState(state: Int) {
-        // 1 = connected, 0 = disconnected
-        notify("connectState", ["connected": state == 1, "state": state])
+        // 1 = connected, 0 = disconnected, {2, -1, -2} = connection/handshake failure.
+        // Distinguish failure from a normal disconnect so the UI doesn't sit on
+        // "connecting…" forever (matches the native DeviceManager mapping).
+        let failed = (state == 2 || state == -1 || state == -2)
+        notify("connectState", [
+            "connected": state == 1,
+            "failed": failed,
+            "state": state
+        ])
     }
 
     public func bleBind(sn: String?, status: Int, protVersion: Int, timezone: Int) {

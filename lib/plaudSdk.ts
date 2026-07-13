@@ -15,6 +15,8 @@ export interface PlaudScanResult {
 
 export interface PlaudConnectState {
   connected: boolean;
+  /** True for connection/handshake failure (state 2/-1/-2), vs. a normal disconnect. */
+  failed: boolean;
   state: number;
 }
 
@@ -62,8 +64,16 @@ export type PlaudAudioFormat = "pcm" | "mp3" | "wav" | "opus";
  * `Capacitor.isNativePlatform()` at the call site.
  */
 export interface PlaudSdkPlugin {
-  /** Initialise the SDK with a per-user JWT. `customDomain` is domain-only (no https://). */
-  initSDK(options: { userAccessToken: string; customDomain: string }): Promise<void>;
+  /**
+   * Initialise the SDK with a per-user JWT. `customDomain` is domain-only (no https://).
+   * `userId` is the app-level user identifier used as the default connect `deviceToken`
+   * (the native app passes it on every connect to bind the device to the user).
+   */
+  initSDK(options: {
+    userAccessToken: string;
+    customDomain: string;
+    userId?: string;
+  }): Promise<void>;
   startScan(): Promise<void>;
   stopScan(): Promise<void>;
   /**
@@ -100,7 +110,7 @@ export interface PlaudSdkPlugin {
   ): Promise<PluginListenerHandle>;
   addListener(
     eventName: "scanTimeout",
-    listener: () => void,
+    listener: (data: { reason?: string }) => void,
   ): Promise<PluginListenerHandle>;
   addListener(
     eventName: "connectState",
