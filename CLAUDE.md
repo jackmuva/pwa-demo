@@ -40,24 +40,37 @@ alone won't pick them up.
 
 - `app/page.tsx` — the entire demo flow: mint a per-user JWT → `initSDK` → `startScan` →
   `connectBleDevice` → `getFileList` → `exportAudio`, plus a confirm-guarded `depair`
-  (unpair) action. Each successful `exportAudio` automatically feeds the upload +
-  transcription flow below.
-- `lib/plaudSdk.ts` — typed wrapper around `registerPlugin<PlaudSdkPlugin>("PlaudSdk")`.
+  (unpair) action. Also listens for device-initiated `recordStart`/`recordStop`/
+  `recordPause`/`recordResume` events (recording is driven by the physical device, not the
+  app) and refreshes the file list after a stop. Each successful `exportAudio` automatically
+  feeds the upload + transcription flow below; `app/FileModal.tsx` renders playback +
+  transcript state per session.
+- `lib/plaud-sdk.ts` — typed wrapper around `registerPlugin<PlaudSdkPlugin>("PlaudSdk")`.
   Outside the Capacitor iOS shell these calls reject with "not implemented" — guard
-  native-only calls with `Capacitor.isNativePlatform()`.
-- `lib/plaud.ts` + `app/api/user-token/route.ts` — server-side two-step OAuth token mint
-  (partner token via `PLAUD_CLIENT_ID`/`PLAUD_SECRET_KEY`, then per-user token). Requires
-  the Node.js runtime (uses `Buffer`). Also exports the shared `BASE_URL`/`requireEnv`
-  used by the transcription helpers below.
-- `lib/transcribe.ts` + `lib/plaudTranscription.ts` + `app/api/transcription/*/route.ts` —
-  after `exportAudio`, the exported mp3's bytes (readable only client-side, via
-  `Capacitor.convertFileSrc`) are pushed through Plaud's File Upload API (presigned S3
-  multipart) to get a public download URL, then through the Transcription API
-  (submit + poll). The API routes exist so the two credential types never reach the
-  client: file upload reuses the per-user Bearer `access_token`; transcription
+  native-only calls with `Capacitor.isNativePlatform()`. Because the WebView loads a
+  **remote** origin (the Vercel URL), plain browser `fetch()` can't read exported files or
+  PUT to S3 presigned URLs (cross-origin/CORS). Two extra plugin methods route around
+  this: `readFile` (reads an exported file's bytes through native code instead of
+  `fetch(Capacitor.convertFileSrc(...))`) and `putBinary` (PUTs bytes to a URL via a native
+  request instead of `fetch(url, {method:"PUT"})`, so the `ETag` response header is
+  actually readable). Use the `readExportedFile()` / `putBinaryNative()` helpers exported
+  from this file rather than calling `fetch` directly.
+- `lib/plaud-auth.ts` + `app/api/user-token/route.ts` — server-side two-step OAuth token
+  mint (partner token via `PLAUD_CLIENT_ID`/`PLAUD_SECRET_KEY`, then per-user token).
+  Requires the Node.js runtime (uses `Buffer`). Also exports the shared `BASE_URL`/
+  `requireEnv` used by the transcription helpers below.
+- `app/transcription-runner.ts` + `lib/plaud-transcription.ts` + `app/api/transcription/*/route.ts` —
+  after `exportAudio`, the exported mp3's bytes (read via `readExportedFile`, native-bridge
+  only — see above) are pushed through Plaud's File Upload API (presigned S3 multipart,
+  parts PUT via `putBinaryNative`) to get a public download URL, then through the
+  Transcription API (submit + poll). The API routes exist so the two credential types never
+  reach the client: file upload reuses the per-user Bearer `access_token`; transcription
   submit/status use partner credentials (`X-Client-Id`/`X-Client-Api-Key`, from
-  `PLAUD_CLIENT_ID`/`PLAUD_API_KEY`) that must stay server-side. See README §4.1 for the
-  full step-by-step and a known CORS/`ETag` risk on the S3 part uploads.
+  `PLAUD_CLIENT_ID`/`PLAUD_API_KEY`) that must stay server-side. `transcription-runner.ts` is
+  the client-side orchestrator (`"use client"`, drives the presign → upload → complete →
+  submit → poll sequence) — it lives under `app/`, not `lib/`, to keep `lib/` reserved for
+  server-only code (`plaud-auth.ts`, `plaud-transcription.ts`); don't move client orchestration
+  logic back into `lib/`.
 - `ios/PlaudPlugin/` — local SwiftPM package bridging the vendor SDK to the WebView.
   `Sources/PlaudPlugin/PlaudSdkPlugin.swift` is the `CAPPlugin`/`CAPBridgedPlugin` bridge
   class; `Frameworks/*.xcframework` are the three precompiled Plaud SDKs
@@ -68,13 +81,16 @@ alone won't pick them up.
 - `ios-sdk-reference.md` — generated reference for the vendor SDK; it can drift, so verify
   real signatures against the `.swiftinterface` files under each `*.framework/Modules/`
   when adding plugin methods.
+- `plaud-design-system/` — the design tokens/CSS (`colors_and_type.css`) and UI kit
+  reference this app's styling is built from; check it before hand-rolling new colors or
+  type styles.
 
 ## Extending the native plugin
 
 When adding a Plaud device feature, mirror the existing pattern end to end: add the
 `CAPPluginMethod`/`@objc func` in `PlaudSdkPlugin.swift`, forward any SDK delegate
 callbacks via `notifyListeners`, and add the matching method/listener types in
-`lib/plaudSdk.ts`. Changing or adding plugin methods changes the native binary — it needs
+`lib/plaud-sdk.ts`. Changing or adding plugin methods changes the native binary — it needs
 an Xcode rebuild and redeploy to a physical device, not just a Vercel deploy.
 
 ## Notes

@@ -1,3 +1,4 @@
+"use client";
 import type {
   CompletedUpload,
   PlaudUploadFileType,
@@ -19,7 +20,6 @@ const TERMINAL_STATUSES = new Set(["SUCCESS", "FAILURE", "REVOKED"]);
 const POLL_INTERVAL_MS = 5000;
 const MAX_POLL_ATTEMPTS = 120; // ~10 minutes
 
-/** Default transcription params — kept in sync with the embedded-playground reference. */
 const DEFAULT_TRANSCRIPTION_PARAMS = {
   transcribe: {
     language: "auto",
@@ -67,7 +67,6 @@ export async function transcribeExportedFile(
     filesize: buffer.byteLength,
     filetype,
   });
-  console.log("presigned", presigned);
 
   const partList: UploadPart[] = [];
   for (const part of presigned.Parts) {
@@ -81,7 +80,6 @@ export async function transcribeExportedFile(
       throw new Error(`Failed to upload part ${part.PartNumber} (${putRes.status})`);
     }
     const etag = putRes.etag;
-    console.log("etag", etag);
     if (!etag) {
       throw new Error(`Part ${part.PartNumber} upload didn't return an ETag header`);
     }
@@ -93,7 +91,6 @@ export async function transcribeExportedFile(
   }
 
   onProgress?.({ phase: "finalizing" });
-  console.log("completing upload");
   const completed = await postJson<CompletedUpload>("/api/transcription/complete", {
     access_token: accessToken,
     file_id: presigned.FileId,

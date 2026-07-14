@@ -88,7 +88,41 @@ Callbacks flow back the other way: the SDK invokes `PlaudDeviceAgentProtocol` de
 methods on the plugin, which forwards them to JS as Capacitor plugin **events**
 (`notifyListeners`), consumed in React via `PlaudSdk.addListener(...)`.
 
-### 3.1 Packaging the frameworks — `ios/PlaudPlugin/`
+### 3.1 How a Capacitor plugin extends a web app
+
+Capacitor's whole value proposition is: write the UI once in web tech, and for anything the
+WebView can't do natively (Bluetooth, filesystem, camera, etc.), expose a small native API
+surface that the web code calls like a regular async JS function. The general shape, on both
+sides:
+
+- **JS side** — `registerPlugin<T>("PluginName")` (from `@capacitor/core`) returns a proxy
+  object typed by an interface you define. Every method call on that proxy is intercepted by
+  the Capacitor JS runtime, serialized, and sent across the bridge Capacitor injects into the
+  `WKWebView`. That injection happens the same way whether the page is loaded from bundled
+  `file://` assets or — as in this app — a remote HTTPS origin, which is exactly what lets
+  `PlaudSdk` work even though `capacitor.config.ts` points at the deployed Vercel URL.
+- **Native side** — a Swift class subclasses `CAPPlugin` and conforms to `CAPBridgedPlugin`,
+  declaring an `identifier`/`jsName` (must match the string passed to `registerPlugin`) and a
+  `pluginMethods` array mapping method names to `@objc` functions. When a call arrives from
+  JS, the bridge looks up the matching `CAPPluginMethod`, invokes it with a `CAPPluginCall`
+  holding the JS arguments, and the Swift code calls `call.resolve(...)` / `call.reject(...)`
+  — which settles the Promise that the JS-side proxy call returned.
+- **Events flow the other way** — the native class can push data to JS at any time via
+  `notifyListeners(eventName, data:)`, independent of any in-flight call. On the JS side,
+  `PluginProxy.addListener(eventName, callback)` subscribes. This is how one-shot device SDK
+  delegate callbacks (e.g. Plaud's `PlaudDeviceAgentProtocol`) become a stream of events
+  (`scanResult`, `connectState`, `fileList`, `exportProgress`, `recordStart`, …) that React
+  state can subscribe to.
+
+`PlaudSdk` is one instance of this pattern: `lib/plaud-sdk.ts` defines the JS-side interface
+and calls `registerPlugin`, while `PlaudSdkPlugin.swift` (§3.2) is the native `CAPPlugin`
+subclass that implements it and forwards Plaud SDK callbacks as events. The same
+call/resolve/event mechanism is also reused for two smaller, single-purpose bridge methods —
+`readFile` and `putBinary` (§4.1) — that exist purely to route around `WKWebView` CORS
+restrictions when the app is loaded from a remote origin, which shows the plugin mechanism is
+general-purpose, not just a BLE-specific trick.
+
+### 3.2 Packaging the frameworks — `ios/PlaudPlugin/`
 
 The native code lives in a **local SwiftPM package**, `ios/PlaudPlugin/`, mirroring how
 `bluetooth-le` is structured. This is the cleanest, most `cap sync`-safe approach:
@@ -133,7 +167,7 @@ The package is attached to the App target in `ios/App/App.xcodeproj/project.pbxp
 the way `CapApp-SPM` is (a local package reference + product dependency). `npx cap sync`
 manages only `CapApp-SPM`, so these edits survive syncs.
 
-### 3.2 Registering the plugin — the non-obvious part
+### 3.3 Registering the plugin — the non-obvious part
 
 **Capacitor 8 does not scan the runtime for plugins.** `CapacitorBridge.registerPlugins()`
 reads `capacitor.config.json` → `packageClassList` and registers each class *by name*. The
@@ -177,17 +211,22 @@ list. `Main.storyboard`'s Bridge View Controller is pointed at this subclass
 
 ## 4. The web side
 
-- **`lib/plaudSdk.ts`** — `registerPlugin<PlaudSdkPlugin>("PlaudSdk")` with typed methods and
+- **`lib/plaud-sdk.ts`** — `registerPlugin<PlaudSdkPlugin>("PlaudSdk")` with typed methods and
   event listeners. In a plain browser (no native shell) these calls reject with
-  "not implemented", so guard with `Capacitor.isNativePlatform()`.
+  "not implemented", so guard with `Capacitor.isNativePlatform()`. It also exports two
+  helpers, `readExportedFile()` and `putBinaryNative()`, that route file reads and S3 PUTs
+  through native plugin methods (`readFile`, `putBinary`) instead of browser `fetch()` —
+  see §4.1 for why.
 - **`app/page.tsx`** — the full demo flow: mint a per-user JWT from `/api/user-token`, call
   `initSDK({ userAccessToken, customDomain: "platform-us.plaud.ai" })` → `startScan()` → tap a
   device to `connectBleDevice` → on `connectState`, `getFileList` → tap a recording to
   `exportAudio` (with live `exportProgress`), which then automatically kicks off the upload +
-  transcription flow below. An **Unpair** button (confirm-guarded, since it is destructive)
-  calls `depair({ clear: true })`.
-- **`app/api/user-token/route.ts` + `lib/plaud.ts`** — mint the per-user access token the SDK
-  needs for its handshake (partner OAuth → user token). `customDomain` is **domain-only**, no
+  transcription flow below (rendered in `app/FileModal.tsx`). It also listens for
+  device-initiated `recordStart`/`recordStop`/`recordPause`/`recordResume` events (recording
+  is triggered by the physical device, not the app) and refreshes the file list after a stop.
+  An **Unpair** button (confirm-guarded, since it is destructive) calls `depair({ clear: true })`.
+- **`app/api/user-token/route.ts` + `lib/plaud-auth.ts`** — mint the per-user access token the
+  SDK needs for its handshake (partner OAuth → user token). `customDomain` is **domain-only**, no
   `https://`.
 
 ### 4.1 Upload + transcription, after `exportAudio`
@@ -195,24 +234,35 @@ list. `Main.storyboard`'s Bridge View Controller is pointed at this subclass
 `exportAudio` only writes the decoded mp3 to the device's local filesystem
 (`Documents/PlaudExports/`) — it isn't reachable by Plaud's Transcription API, which requires a
 public download URL. So each export is pushed through Plaud's **File Upload API** to get one,
-then handed to the **Transcription API**:
+then handed to the **Transcription API**.
+
+Because `capacitor.config.ts` points the WKWebView at the **remote** Vercel origin (not
+`file://` bundled assets), plain browser `fetch()` can't touch these bytes: a `capacitor://…/
+_capacitor_file_/…` URL from `Capacitor.convertFileSrc()` is a cross-origin custom scheme that
+WKWebView's CORS check blocks, and a browser `PUT` straight to the S3 presigned URL is blocked
+the same way (and even if it weren't, reading the `ETag` response header back would need the
+bucket's CORS config to expose it). Both problems are solved by routing through **native**
+requests instead of `fetch()` — two extra `PlaudSdk` plugin methods, `readFile` and `putBinary`,
+issue the read/PUT from Swift and hand the result back to JS:
 
 ```
 exportAudio() → local file
-     │  fetch(Capacitor.convertFileSrc(outputPath)) — only the WebView can read the file's bytes
+     │  readExportedFile(outputPath)  — PlaudSdk.readFile() reads the bytes natively,
+     │                                   base64-decoded back into an ArrayBuffer in JS
      ▼
-lib/transcribe.ts  transcribeExportedFile()
+app/transcription-runner.ts  transcribeExportedFile()
      │  1. POST /api/transcription/presign   → chunked S3 presigned PUT URLs (5 MB parts)
-     │  2. PUT each chunk directly to S3 from the browser, collecting the `ETag` response header
+     │  2. putBinaryNative() per chunk — PlaudSdk.putBinary() PUTs to S3 via URLSession,
+     │                                    returning the response status and `ETag` directly
      │  3. POST /api/transcription/complete  → finalizes the multipart upload, returns a
      │                                          `DownloadUrl` (valid 24h)
      │  4. POST /api/transcription/submit    → submits DownloadUrl, returns a transcription_id
      │  5. poll GET /api/transcription/status/[id] every 5s until SUCCESS/FAILURE/REVOKED
      ▼
-transcript text, shown in the playback modal
+transcript text, shown in the playback modal (app/FileModal.tsx)
 ```
 
-- **`lib/plaudTranscription.ts`** — server-only wrapper around Plaud's File Upload API
+- **`lib/plaud-transcription.ts`** — server-only wrapper around Plaud's File Upload API
   (`generatePresignedUploadUrls`, `completeMultipartUpload`) and Transcription API
   (`submitTranscription`, `getTranscriptionTask`).
 - **`app/api/transcription/{presign,complete,submit,status/[id]}/route.ts`** — thin proxy routes.
@@ -221,16 +271,16 @@ transcript text, shown in the playback modal
   which already holds it for `initSDK`), while transcription submit/status use partner client
   credentials (`X-Client-Id` / `X-Client-Api-Key`, from `PLAUD_CLIENT_ID` / `PLAUD_API_KEY`) that
   must stay server-side.
-- **`lib/transcribe.ts`** — client-side orchestration. It's the only piece that touches the raw
-  file bytes (the API routes never see them — S3 multipart PUTs go straight from the browser to
-  the presigned URLs), and it drives the presign → upload → complete → submit → poll sequence.
-- Region: currently hardcoded to `https://platform-us.plaud.ai/developer/api` in `lib/plaud.ts`
-  (`BASE_URL`, shared by both the OAuth and transcription helpers). Switch it if you need the
-  Japan deployment (`platform-jp.plaud.ai`); EU/Singapore aren't available yet.
-- **Known risk:** capturing the S3 `ETag` response header from a browser `fetch()` requires the
-  bucket's CORS config to include `ExposeHeaders: ["ETag"]`. If Plaud's bucket isn't configured
-  for browser (as opposed to native SDK) uploads, part uploads will fail with a clear error
-  rather than silently omitting the ETag — that's the first thing to check if uploads fail here.
+- **`app/transcription-runner.ts`** — client-side orchestration (`"use client"`). It's the only
+  piece that touches the raw file bytes (the API routes never see them — multipart PUTs go
+  straight from native code to the presigned URLs), and it drives the presign → upload →
+  complete → submit → poll sequence. It lives under `app/`, not `lib/`, on purpose: `lib/` is
+  reserved for server-only modules (`plaud-auth.ts`, `plaud-transcription.ts`), so mixing this
+  client-only orchestrator in there would blur which files are safe to import from a Server
+  Component vs. which assume a browser/native runtime.
+- Region: currently hardcoded to `https://platform-us.plaud.ai/developer/api` in
+  `lib/plaud-auth.ts` (`BASE_URL`, shared by both the OAuth and transcription helpers). Switch
+  it if you need the Japan deployment (`platform-jp.plaud.ai`); EU/Singapore aren't available yet.
 
 ---
 
@@ -275,11 +325,12 @@ Required `Info.plist` keys (already set in `ios/App/App/Info.plist`):
 | `ios/App/App/MainViewController.swift` | Registers the local plugin (`capacitorDidLoad`). |
 | `ios/App/App/Base.lproj/Main.storyboard` | Points the bridge VC at `MainViewController`. |
 | `ios/App/App.xcodeproj/project.pbxproj` | Attaches `PlaudPlugin` to the App target. |
-| `lib/plaudSdk.ts` | Typed JS wrapper (`registerPlugin`). |
+| `lib/plaud-sdk.ts` | Typed JS wrapper (`registerPlugin`) + native-bridge file/upload helpers. |
 | `app/page.tsx` | Demo UI: init → scan → connect → list → export, plus unpair. |
-| `lib/plaudTranscription.ts` | Server-only File Upload API + Transcription API calls. |
+| `app/FileModal.tsx` | Playback + transcript modal for a selected recording. |
+| `lib/plaud-transcription.ts` | Server-only File Upload API + Transcription API calls. |
 | `app/api/transcription/*/route.ts` | Proxy routes so upload/transcription credentials stay server-side. |
-| `lib/transcribe.ts` | Client-side presign → S3 upload → complete → submit → poll orchestration. |
+| `app/transcription-runner.ts` | Client-side presign → native S3 upload → complete → submit → poll orchestration. |
 
 ---
 
@@ -291,7 +342,7 @@ same pattern in `PlaudSdkPlugin.swift`:
 1. Add a `CAPPluginMethod(name:...)` entry to `pluginMethods` and an `@objc func` handler.
 2. For SDK results delivered via `PlaudDeviceAgentProtocol`, implement the delegate method and
    forward it with `notifyListeners(event, data:)`.
-3. Mirror the new method/event in `lib/plaudSdk.ts`.
+3. Mirror the new method/event in `lib/plaud-sdk.ts`.
 4. Verify signatures against the frameworks' real `.swiftinterface` files (under each
    `*.framework/Modules/*.swiftmodule/arm64-apple-ios.swiftinterface`), not just
    `ios-sdk-reference.md` — the doc is generated and can drift.

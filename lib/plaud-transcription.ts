@@ -14,7 +14,6 @@ export interface PresignedUploadUrls {
   Parts: PresignedPart[];
 }
 
-/** Step 1 of the File Upload API — get chunked presigned S3 PUT URLs for a file. */
 export async function generatePresignedUploadUrls(
   userAccessToken: string,
   filesize: number,
@@ -47,12 +46,10 @@ export interface UploadPart {
 export interface CompletedUpload {
   FileId: string;
   FileType: string;
-  /** Valid for 24 hours. */
   DownloadUrl: string;
   FileMd5?: string;
 }
 
-/** Step 3 of the File Upload API — finalize the S3 multipart upload after all parts are PUT. */
 export async function completeMultipartUpload(
   userAccessToken: string,
   params: {
@@ -136,7 +133,6 @@ function transcriptionAuthHeaders(): HeadersInit {
   };
 }
 
-/** Submit a publicly downloadable audio URL (e.g. the `DownloadUrl` from `completeMultipartUpload`) for transcription. */
 export async function submitTranscription(
   fileUrl: string,
   params?: TranscriptionParams,
@@ -154,7 +150,6 @@ export async function submitTranscription(
   return res.json();
 }
 
-/** Poll for task status/results. Keep polling while status is PENDING/RECEIVED/STARTED/PROGRESS. */
 export async function getTranscriptionTask(transcriptionId: string): Promise<TranscriptionTask> {
   const res = await fetch(`${BASE_URL}/open/partner/ai/transcriptions/${transcriptionId}`, {
     headers: transcriptionAuthHeaders(),

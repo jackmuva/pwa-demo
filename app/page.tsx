@@ -8,7 +8,7 @@ import {
   type PlaudScanDevice,
   type PlaudFile,
 } from "@/lib/plaud-sdk";
-import { transcribeExportedFile } from "@/lib/transcribe";
+import { transcribeExportedFile } from "@/app/transcription-runner";
 import { FileModal, type FileResult } from "./FileModal";
 import useSWR from "swr";
 import { RadarIcon ,FileTextIcon, UnlinkIcon, FileAudioIcon, RefreshIcon } from "./icons";
