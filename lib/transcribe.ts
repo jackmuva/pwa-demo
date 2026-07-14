@@ -58,6 +58,8 @@ export async function transcribeExportedFile(
   accessToken: string,
   onProgress?: (p: TranscribeProgress) => void,
 ): Promise<TranscriptionTask> {
+  console.log("transcribing");
+  console.log(fileSrc, filetype, accessToken);
   const fileRes = await fetch(fileSrc);
   if (!fileRes.ok) throw new Error(`Failed to read exported file (${fileRes.status})`);
   const buffer = await fileRes.arrayBuffer();
