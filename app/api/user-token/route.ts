@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { mintUserToken, PlaudApiError } from "@/lib/plaud";
+import { mintUserToken, PlaudApiError } from "@/lib/plaud-auth";
 
 // Uses Buffer for Basic auth — requires the Node.js runtime.
 export const runtime = "nodejs";

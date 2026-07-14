@@ -6,7 +6,7 @@ import {
   PlaudSdk,
   type PlaudScanDevice,
   type PlaudFile,
-} from "@/lib/plaudSdk";
+} from "@/lib/plaud-sdk";
 import { transcribeExportedFile } from "@/lib/transcribe";
 import useSWR from "swr";
 

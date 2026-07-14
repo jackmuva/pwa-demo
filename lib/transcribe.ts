@@ -4,7 +4,7 @@ import type {
   PresignedUploadUrls,
   TranscriptionTask,
   UploadPart,
-} from "@/lib/plaudTranscription";
+} from "@/lib/plaud-transcription";
 
 export type TranscribePhase = "uploading" | "finalizing" | "submitting" | "processing";
 

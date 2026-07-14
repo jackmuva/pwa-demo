@@ -1,4 +1,4 @@
-import { BASE_URL, requireEnv, PlaudApiError } from "@/lib/plaud";
+import { BASE_URL, requireEnv, PlaudApiError } from "@/lib/plaud-auth";
 
 export type PlaudUploadFileType = "mp3" | "opus";
 

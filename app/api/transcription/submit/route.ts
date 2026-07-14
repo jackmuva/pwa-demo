@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { PlaudApiError } from "@/lib/plaud";
-import { submitTranscription, type TranscriptionParams } from "@/lib/plaudTranscription";
+import { PlaudApiError } from "@/lib/plaud-auth";
+import { submitTranscription, type TranscriptionParams } from "@/lib/plaud-transcription";
 
 /**
  * POST /api/transcription/submit
@@ -10,6 +10,7 @@ import { submitTranscription, type TranscriptionParams } from "@/lib/plaudTransc
  * Requires PLAUD_CLIENT_ID and PLAUD_API_KEY in the environment.
  */
 export async function POST(req: Request) {
+  console.log("submitted transcription job");
   let body: unknown;
   try {
     body = await req.json();
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
       file_url,
       params as TranscriptionParams | undefined,
     );
+    console.log("transcription job", task);
     return NextResponse.json(task);
   } catch (err) {
     if (err instanceof PlaudApiError) {

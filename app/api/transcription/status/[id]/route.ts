@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { PlaudApiError } from "@/lib/plaud";
-import { getTranscriptionTask } from "@/lib/plaudTranscription";
+import { PlaudApiError } from "@/lib/plaud-auth";
+import { getTranscriptionTask } from "@/lib/plaud-transcription";
 
 /**
  * GET /api/transcription/status/[id]
@@ -12,12 +12,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  console.log("getting status", id);
   if (!id) {
     return NextResponse.json({ error: "Missing transcription id" }, { status: 400 });
   }
 
   try {
     const task = await getTranscriptionTask(id);
+    console.log("transcription: ", task);
     return NextResponse.json(task);
   } catch (err) {
     if (err instanceof PlaudApiError) {

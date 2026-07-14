@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { PlaudApiError } from "@/lib/plaud";
-import { generatePresignedUploadUrls, type PlaudUploadFileType } from "@/lib/plaudTranscription";
+import { PlaudApiError } from "@/lib/plaud-auth";
+import { generatePresignedUploadUrls, type PlaudUploadFileType } from "@/lib/plaud-transcription";
 
 /**
  * POST /api/transcription/presign
@@ -8,6 +8,7 @@ import { generatePresignedUploadUrls, type PlaudUploadFileType } from "@/lib/pla
  * Returns: { FileId, UploadId, ChunkSize, Parts: [{ PartNumber, PresignedUrl }] }
  */
 export async function POST(req: Request) {
+  console.log("generating urls");
   let body: unknown;
   try {
     body = await req.json();
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
       filesize,
       filetype as PlaudUploadFileType,
     );
+    console.log("presigned: ", presigned);
     return NextResponse.json(presigned);
   } catch (err) {
     if (err instanceof PlaudApiError) {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { PlaudApiError } from "@/lib/plaud";
+import { PlaudApiError } from "@/lib/plaud-auth";
 import {
   completeMultipartUpload,
   type PlaudUploadFileType,
   type UploadPart,
-} from "@/lib/plaudTranscription";
+} from "@/lib/plaud-transcription";
 
 function isUploadPartList(value: unknown): value is UploadPart[] {
   return (
@@ -30,6 +30,7 @@ function isUploadPartList(value: unknown): value is UploadPart[] {
  * Returns: { FileId, FileType, DownloadUrl, FileMd5 } — DownloadUrl is valid for 24h.
  */
 export async function POST(req: Request) {
+  console.log("completed upload");
   let body: unknown;
   try {
     body = await req.json();
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
       filetype: filetype as PlaudUploadFileType,
       fileMd5: typeof file_md5 === "string" ? file_md5 : undefined,
     });
+    console.log("complete ", completed);
     return NextResponse.json(completed);
   } catch (err) {
     if (err instanceof PlaudApiError) {
