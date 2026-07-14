@@ -9,7 +9,7 @@ import {
   type PlaudFile,
 } from "@/lib/plaud-sdk";
 import { transcribeExportedFile } from "@/app/transcription-runner";
-import { FileModal, type FileResult } from "./FileModal";
+import { FileModal, type FileResult } from "./file-modal";
 import useSWR from "swr";
 import { RadarIcon ,FileTextIcon, UnlinkIcon, FileAudioIcon, RefreshIcon } from "./icons";
 
