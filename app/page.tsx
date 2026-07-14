@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import {
   PlaudSdk,
+  readExportedFile,
   type PlaudScanDevice,
   type PlaudFile,
 } from "@/lib/plaud-sdk";
@@ -275,7 +276,7 @@ export default function Home() {
       setExportInfo(`session ${f.sessionId}: saved → ${outputPath}`);
       const src = Capacitor.convertFileSrc(outputPath);
       setPlayback({ sessionId: f.sessionId, src });
-      await handleTranscribe(src);
+      await handleTranscribe(outputPath);
     } catch (err) {
       console.error("[Plaud] exportAudio failed", f.sessionId, err);
       setError(err instanceof Error ? err.message : String(err));
@@ -284,14 +285,18 @@ export default function Home() {
   };
 
   // Upload the just-exported mp3 to Plaud's storage and run it through transcription.
-  const handleTranscribe = async (fileSrc: string) => {
+  // `outputPath` is the raw native path from exportAudio; its bytes are read through the
+  // native bridge (readExportedFile) because convertFileSrc() URLs aren't fetchable from
+  // the remote-loaded WebView.
+  const handleTranscribe = async (outputPath: string) => {
     const token = data?.access_token;
     if (!token) {
       setError("User token not ready — can't transcribe yet.");
       return;
     }
     try {
-      const task = await transcribeExportedFile(fileSrc, "mp3", token, (p) => {
+      const buffer = await readExportedFile(outputPath);
+      const task = await transcribeExportedFile(buffer, "mp3", token, (p) => {
         setTranscribeStatus(
           p.phase === "uploading"
             ? `uploading to Plaud… ${p.percent ?? 0}%`

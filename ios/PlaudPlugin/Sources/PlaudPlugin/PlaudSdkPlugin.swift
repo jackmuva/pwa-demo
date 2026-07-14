@@ -29,7 +29,8 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
         CAPPluginMethod(name: "depair", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isConnected", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getFileList", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "exportAudio", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "exportAudio", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise)
     ]
 
     /// `connectBleDevice` needs the actual `BleDevice` the SDK handed us during a scan —
@@ -204,6 +205,28 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
         }
     }
 
+    /// Read a file previously written by `exportAudio` and return its bytes as a base64
+    /// string. The WebView loads a remote origin (see `capacitor.config.ts`), so the
+    /// `capacitor://localhost/_capacitor_file_/…` URL from `convertFileSrc()` is *not*
+    /// fetchable from JS — it's a cross-origin request to a custom scheme and WKWebView's
+    /// CORS check blocks it. JS reads export bytes through this bridge instead. Accepts
+    /// either a raw filesystem path or a `capacitor://…/_capacitor_file_/…` URL.
+    @objc func readFile(_ call: CAPPluginCall) {
+        guard let path = call.getString("path"), !path.isEmpty else {
+            call.reject("path is required")
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fileURL = Self.resolveFileURL(from: path)
+            do {
+                let data = try Data(contentsOf: fileURL)
+                call.resolve(["data": data.base64EncodedString()])
+            } catch {
+                call.reject("Failed to read file at \(fileURL.path): \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - PlaudDeviceAgentProtocol
 
     // Required member. Surfaces the handshake / pen state to JS.
@@ -322,6 +345,21 @@ public class PlaudSdkPlugin: CAPPlugin, CAPBridgedPlugin, PlaudDeviceAgentProtoc
             return scannedDevices.values.first { $0.serialNumber == serial }
         }
         return nil
+    }
+
+    /// Turn whatever JS passed — a raw path, a `file://` URL, or a
+    /// `capacitor://localhost/_capacitor_file_/<path>` URL from `convertFileSrc()` — into a
+    /// real on-disk file URL.
+    private static func resolveFileURL(from path: String) -> URL {
+        if let marker = path.range(of: "_capacitor_file_") {
+            let raw = String(path[marker.upperBound...])
+            let decoded = raw.removingPercentEncoding ?? raw
+            return URL(fileURLWithPath: decoded)
+        }
+        if let url = URL(string: path), url.isFileURL {
+            return url
+        }
+        return URL(fileURLWithPath: path)
     }
 
     private static func exportFormat(from raw: String?) -> AudioExportFormat {

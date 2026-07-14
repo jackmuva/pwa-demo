@@ -49,25 +49,17 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
  * multipart flow, then submits the resulting download URL for transcription and polls
  * until it reaches a terminal status.
  *
- * `fileSrc` must be a URL `fetch()` can read the file's bytes from — for a native
- * export this is `Capacitor.convertFileSrc(outputPath)`.
+ * `buffer` holds the exported file's raw bytes. Read them through the native bridge with
+ * `readExportedFile(outputPath)` — do NOT `fetch(Capacitor.convertFileSrc(...))`, which
+ * fails when the WebView loads a remote origin (cross-origin custom scheme, blocked by
+ * CORS).
  */
 export async function transcribeExportedFile(
-  fileSrc: string,
+  buffer: ArrayBuffer,
   filetype: PlaudUploadFileType,
   accessToken: string,
   onProgress?: (p: TranscribeProgress) => void,
 ): Promise<TranscriptionTask> {
-  console.log("transcribing");
-  console.log(fileSrc, filetype, accessToken);
-  const fileRes = await fetch(fileSrc);
-  if (!fileRes.ok) {
-    console.log("not ok", fileRes);
-    throw new Error(`Failed to read exported file (${fileRes.status})`);
-  }
-  const buffer = await fileRes.arrayBuffer();
-  console.log("buffer: ", buffer);
-
   onProgress?.({ phase: "uploading", percent: 0 });
   const presigned = await postJson<PresignedUploadUrls>("/api/transcription/presign", {
     access_token: accessToken,

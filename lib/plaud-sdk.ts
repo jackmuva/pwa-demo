@@ -130,6 +130,13 @@ export interface PlaudSdkPlugin {
     format?: PlaudAudioFormat;
     channels?: number;
   }): Promise<{ sessionId: number; outputPath: string }>;
+  /**
+   * Read a file written by `exportAudio` and return its bytes base64-encoded. Needed
+   * because the WebView loads a remote origin, so `Capacitor.convertFileSrc()` URLs
+   * aren't fetchable from JS (cross-origin custom scheme, blocked by CORS). Accepts the
+   * raw `outputPath` from `exportAudio` or a `convertFileSrc()` URL.
+   */
+  readFile(options: { path: string }): Promise<{ data: string }>;
 
   addListener(
     eventName: "scanResult",
@@ -182,3 +189,19 @@ export interface PlaudSdkPlugin {
 }
 
 export const PlaudSdk = registerPlugin<PlaudSdkPlugin>("PlaudSdk");
+
+/**
+ * Read an exported file's raw bytes through the native bridge. Use this instead of
+ * `fetch(Capacitor.convertFileSrc(path))`, which fails when the WebView loads a remote
+ * origin (the `capacitor://…/_capacitor_file_/…` URL is a cross-origin custom scheme and
+ * WKWebView's CORS check blocks the fetch).
+ */
+export async function readExportedFile(path: string): Promise<ArrayBuffer> {
+  const { data } = await PlaudSdk.readFile({ path });
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
