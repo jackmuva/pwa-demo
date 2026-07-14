@@ -11,64 +11,10 @@ import {
 import { transcribeExportedFile } from "@/lib/transcribe";
 import { FileModal, type FileResult } from "./FileModal";
 import useSWR from "swr";
+import { RadarIcon ,FileTextIcon, UnlinkIcon, FileAudioIcon, RefreshIcon } from "./icons";
 
 const PLAUD_DOMAIN = "platform-us.plaud.ai";
 const USER_ID = "jackmu";
-
-/* ---------- Thin-stroke line icons (Lucide-style, currentColor) ---------- */
-type IconProps = { className?: string; size?: number };
-const svg = (size: number, className?: string) => ({
-  width: size,
-  height: size,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.75,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  className,
-});
-const RadarIcon = ({ className, size = 20 }: IconProps) => (
-  <svg {...svg(size, className)}>
-    <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34" />
-    <path d="M4 6h.01" />
-    <path d="M2.29 9.62A10 10 0 1 0 21.31 8.35" />
-    <path d="M16.24 7.76A6 6 0 1 0 8.23 16.67" />
-    <path d="M12 18h.01" />
-    <path d="M17.99 11.66A6 6 0 0 1 15.77 16.67" />
-    <circle cx="12" cy="12" r="2" />
-    <path d="m13.41 10.59 5.66-5.66" />
-  </svg>
-);
-const UnlinkIcon = ({ className, size = 20 }: IconProps) => (
-  <svg {...svg(size, className)}>
-    <path d="m18.84 12.25 1.72-1.71a4.24 4.24 0 0 0-6-6l-1.71 1.72" />
-    <path d="m5.17 11.75-1.71 1.71a4.24 4.24 0 0 0 6 6l1.71-1.71" />
-    <path d="m2 2 20 20" />
-  </svg>
-);
-const RefreshIcon = ({ className, size = 16 }: IconProps) => (
-  <svg {...svg(size, className)}>
-    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-    <path d="M21 3v5h-5" />
-    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-    <path d="M8 16H3v5" />
-  </svg>
-);
-const FileAudioIcon = ({ className, size = 18 }: IconProps) => (
-  <svg {...svg(size, className)}>
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6" />
-    <path d="M8 16a2 2 0 1 0 4 0V9l4 1.5" />
-  </svg>
-);
-const FileTextIcon = ({ className, size = 16 }: IconProps) => (
-  <svg {...svg(size, className)}>
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
-    <path d="M14 2v5h5" />
-    <path d="M10 9H8M16 13H8M16 17H8" />
-  </svg>
-);
 
 /* Map a freeform status string to a tone + dot color. */
 function statusTone(status: string): "ok" | "err" | "live" | "idle" {
@@ -94,14 +40,12 @@ export default function Home() {
   const [recording, setRecording] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Per-session export + transcription cache, so an already-processed file re-opens
-  // instantly instead of re-exporting and re-transcribing.
+
   const [results, setResults] = useState<Record<number, FileResult>>({});
   const [openSessionId, setOpenSessionId] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
   const initedRef = useRef(false);
 
-  // Mint the per-user JWT the SDK needs for its handshake.
   const { data } = useSWR("api/user-token", async () => {
     const tokenRes = await fetch(`${window.location.origin}/api/user-token`, {
       method: "POST",
@@ -111,7 +55,6 @@ export default function Home() {
     return { access_token: access_token as string };
   });
 
-  // Wire the native SDK's delegate events to React state. Native-only.
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const handles: PluginListenerHandle[] = [];
@@ -270,8 +213,6 @@ export default function Home() {
       [sessionId]: { ...prev[sessionId], ...patch },
     }));
 
-  // Opening a file: if it's already been exported + transcribed, just show the cached
-  // result in the modal. Otherwise kick off the export + transcription flow.
   const handleFileClick = (f: PlaudFile) => {
     setOpenSessionId(f.sessionId);
     if (results[f.sessionId]?.status === "ready") return;
@@ -311,10 +252,6 @@ export default function Home() {
     }
   };
 
-  // Upload the just-exported mp3 to Plaud's storage and run it through transcription.
-  // `outputPath` is the raw native path from exportAudio; its bytes are read through the
-  // native bridge (readExportedFile) because convertFileSrc() URLs aren't fetchable from
-  // the remote-loaded WebView.
   const runTranscribe = async (sessionId: number, outputPath: string) => {
     const token = data?.access_token;
     if (!token) {
@@ -339,8 +276,6 @@ export default function Home() {
         });
       });
       console.log("[Plaud] transcription task", task);
-      // `data.text` is the full transcript, but some models only populate the
-      // per-segment `data.results[]` — fall back to joining those.
       const text =
         task.data.text?.trim() ||
         task.data.results?.map((s) => s.text).join(" ").trim() ||
@@ -376,7 +311,7 @@ export default function Home() {
     <div className="flex w-full flex-1 flex-col overflow-x-hidden">
       {/* Fixed frosted chrome */}
       <header
-        className="sticky top-5 z-20 flex items-center justify-between border-b px-5 py-3.5"
+        className="bg-background sticky top-20 z-20 flex items-center justify-between border-b px-5 py-3.5"
         style={{
           borderColor: "var(--dev-border-subtle)",
           background: "rgba(15,15,15,0.72)",
@@ -410,7 +345,7 @@ export default function Home() {
         </span>
       </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-5 py-10">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-5 py-24">
         {/* Intro */}
         <section className="reveal">
           <p className="overline">Plaud SDK · reference app</p>
