@@ -29,12 +29,12 @@ export function FileModal({
   const busy = status === "exporting" || status === "transcribing";
 
   return (
-    <div className="min-h-36 fixed inset-0 z-30 flex items-end justify-center p-4 sm:items-center"
+    <div className="fixed inset-0 z-30 flex items-end justify-center p-4 sm:items-center"
       style={{ background: "rgba(0,0,0,0.6)" }}
       onClick={onClose}
     >
       <div
-        className="dev-card flex h-[66vh] w-full max-w-md flex-col p-5"
+        className="dev-card flex h-[90vh] w-full max-w-md flex-col p-5"
         style={{ boxShadow: "var(--shadow-lg)" }}
         onClick={(e) => e.stopPropagation()}
       >

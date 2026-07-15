@@ -309,9 +309,8 @@ export default function Home() {
 
   return (
     <div className="flex w-full flex-1 flex-col overflow-x-hidden">
-      {/* Fixed frosted chrome */}
       <header
-        className="bg-background sticky top-20 z-20 flex items-center justify-between border-b px-5 py-3.5"
+        className="bg-background sticky top-10 z-20 flex items-center justify-between border-b px-5 py-3.5"
         style={{
           borderColor: "var(--dev-border-subtle)",
           background: "rgba(15,15,15,0.72)",
@@ -329,7 +328,7 @@ export default function Home() {
             style={{ height: 18, width: "auto" }}
           />
           <span className="overline" style={{ marginTop: 1 }}>
-            Developer
+            Capacitor App
           </span>
         </div>
         <span className="pill">
@@ -348,7 +347,6 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-5 py-24">
         {/* Intro */}
         <section className="reveal">
-          <p className="overline">Plaud SDK · reference app</p>
           <h1 className="mt-2 text-[32px] leading-none">
             Connect. Record. Transcribe.
           </h1>
@@ -363,14 +361,12 @@ export default function Home() {
 
         {/* Primary actions */}
         <section className="reveal delay-100 flex flex-wrap gap-3">
-          <button
-            onClick={handleScan}
+          {!connected && <button onClick={handleScan}
             disabled={scanning}
-            className="btn btn-primary flex-1"
-          >
+            className="btn btn-primary flex-1">
             <RadarIcon size={18} />
-            {scanning ? "Scanning…" : connected ? "Rescan" : "Init & scan"}
-          </button>
+            {scanning ? "Scanning…" : "Init & scan"}
+          </button>}
           {connected && (
             <button onClick={handleDepair} className="btn btn-destructive">
               <UnlinkIcon size={18} />
@@ -450,11 +446,8 @@ export default function Home() {
                   >
                     {d.name || d.serialNumber || d.uuid}
                   </span>
-                  <span
-                    className="mono shrink-0 text-[12px]"
-                    style={{ color: "var(--dev-text-faint)" }}
-                  >
-                    {d.rssi} dBm
+                  <span className="mono shrink-0 text-[12px]">
+                    Connect
                   </span>
                 </button>
               ))}
