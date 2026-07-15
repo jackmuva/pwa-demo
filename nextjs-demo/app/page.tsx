@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import {
   PlaudSdk,
@@ -11,31 +10,14 @@ import {
 import { transcribeExportedFile } from "@/app/transcription-runner";
 import { FileModal, type FileResult } from "./file-modal";
 import useSWR from "swr";
-import { RadarIcon ,FileTextIcon, UnlinkIcon, FileAudioIcon, RefreshIcon } from "./icons";
+import { RadarIcon, FileTextIcon, UnlinkIcon, FileAudioIcon, RefreshIcon } from "./icons";
 
 const PLAUD_DOMAIN = "platform-us.plaud.ai";
 const USER_ID = "jackmu";
 
-/* Map a freeform status string to a tone + dot color. */
-function statusTone(status: string): "ok" | "err" | "live" | "idle" {
-  const s = status.toLowerCase();
-  if (s.includes("record") || s.includes("scanning") || s.includes("connecting"))
-    return "live";
-  if (s.includes("fail") || s.includes("error") || s.includes("off")) return "err";
-  if (s.includes("connected") || s.includes("depaired")) return "ok";
-  return "idle";
-}
-const TONE_COLOR: Record<string, string> = {
-  ok: "var(--status-ok)",
-  err: "var(--dev-status-error)",
-  live: "var(--dev-accent-blue)",
-  idle: "var(--dev-text-faint)",
-};
-
 export default function Home() {
   const [devices, setDevices] = useState<PlaudScanDevice[]>([]);
   const [files, setFiles] = useState<PlaudFile[]>([]);
-  const [status, setStatus] = useState("idle");
   const [connected, setConnected] = useState(false);
   const [recording, setRecording] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
@@ -69,23 +51,14 @@ export default function Home() {
         }),
         await PlaudSdk.addListener("scanTimeout", ({ reason }) => {
           setScanning(false);
-          setStatus(
-            reason === "bluetoothNotPoweredOn"
-              ? "Bluetooth is off or permission was denied"
-              : "scan timed out",
-          );
         }),
         await PlaudSdk.addListener("connectState", ({ connected, failed }) => {
           console.log("[Plaud] connectState", { connected, failed });
-          setStatus(connected ? "connected" : failed ? "connection failed" : "disconnected");
           setConnected(connected);
           if (connected) setScanning(false);
           // Once connected, pull the on-device recording list.
-          if (connected) PlaudSdk.getFileList({ startSessionId: 0 }).catch(() => {});
+          if (connected) PlaudSdk.getFileList({ startSessionId: 0 }).catch(() => { });
         }),
-        await PlaudSdk.addListener("penState", (s) =>
-          setStatus(`pen state ${s.state} (key ${s.keyState})`),
-        ),
         await PlaudSdk.addListener("fileList", ({ files }) => {
           console.log("[Plaud] fileList", files);
           setFiles(files);
@@ -114,10 +87,10 @@ export default function Home() {
           setIsLive(false);
           setRecording(
             `Stopped · session ${r.sessionId} · ${(r.fileSize / 1024).toFixed(0)} KB` +
-              (r.fileExist ? "" : " (no file)"),
+            (r.fileExist ? "" : " (no file)"),
           );
           // A fresh recording won't be in the list fetched at connect — refresh it.
-          PlaudSdk.getFileList({ startSessionId: 0 }).catch(() => {});
+          PlaudSdk.getFileList({ startSessionId: 0 }).catch(() => { });
         }),
         await PlaudSdk.addListener("recordPause", (r) => {
           console.log("[Plaud] recordPause", r);
@@ -131,7 +104,6 @@ export default function Home() {
         }),
         await PlaudSdk.addListener("depair", ({ status }) => {
           console.log("[Plaud] depair", status);
-          setStatus(`depaired (status ${status})`);
           setConnected(false);
           setFiles([]);
           setRecording(null);
@@ -164,7 +136,6 @@ export default function Home() {
     }
     try {
       if (!initedRef.current) {
-        setStatus("initializing SDK…");
         await PlaudSdk.initSDK({
           userAccessToken: token,
           customDomain: PLAUD_DOMAIN,
@@ -173,12 +144,10 @@ export default function Home() {
         initedRef.current = true;
       }
       setScanning(true);
-      setStatus("scanning…");
       await PlaudSdk.startScan();
     } catch (err) {
       setScanning(false);
       setError(err instanceof Error ? err.message : String(err));
-      setStatus("error");
     }
   };
 
@@ -186,7 +155,6 @@ export default function Home() {
     setError(null);
     if (!ensureNative()) return;
     try {
-      setStatus(`connecting to ${d.name || d.serialNumber}…`);
       await PlaudSdk.stopScan();
       setScanning(false);
       await PlaudSdk.connectBleDevice({ uuid: d.uuid, serialNumber: d.serialNumber });
@@ -200,7 +168,6 @@ export default function Home() {
     if (!ensureNative()) return;
     if (!window.confirm("Unpair this device and clear local pairing state?")) return;
     try {
-      setStatus("depairing…");
       await PlaudSdk.depair({ clear: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -305,45 +272,8 @@ export default function Home() {
     }
   };
 
-  const tone = statusTone(status);
-
   return (
     <div className="flex w-full flex-1 flex-col overflow-x-hidden">
-      <header
-        className="bg-background sticky top-10 z-20 flex items-center justify-between border-b px-5 py-3.5"
-        style={{
-          borderColor: "var(--dev-border-subtle)",
-          background: "rgba(15,15,15,0.72)",
-          backdropFilter: "blur(var(--dev-blur-chrome))",
-          WebkitBackdropFilter: "blur(var(--dev-blur-chrome))",
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          <Image
-            src="/brand/logo-wordmark-white.png"
-            alt="Plaud"
-            width={78}
-            height={20}
-            priority
-            style={{ height: 18, width: "auto" }}
-          />
-          <span className="overline" style={{ marginTop: 1 }}>
-            Capacitor App
-          </span>
-        </div>
-        <span className="pill">
-          <span
-            className="rec-dot"
-            style={{
-              animation: tone === "live" ? undefined : "none",
-              background: TONE_COLOR[tone],
-              boxShadow: `0 0 0 4px color-mix(in srgb, ${TONE_COLOR[tone]} 18%, transparent)`,
-            }}
-          />
-          {status}
-        </span>
-      </header>
-
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-5 py-24">
         {/* Intro */}
         <section className="reveal">
@@ -368,7 +298,7 @@ export default function Home() {
             {scanning ? "Scanning…" : "Init & scan"}
           </button>}
           {connected && (
-            <button onClick={handleDepair} className="btn btn-destructive">
+            <button onClick={handleDepair} className="btn btn-destructive flex-1">
               <UnlinkIcon size={18} />
               Unpair
             </button>
@@ -425,7 +355,7 @@ export default function Home() {
         )}
 
         {/* Discovered devices — tap to connect. */}
-        {devices.length > 0 && !connected && (
+        {devices.length > 0 && !connected && scanning && (
           <section className="reveal delay-200 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 className="overline">Devices</h2>
@@ -435,11 +365,9 @@ export default function Home() {
             </div>
             <div className="flex flex-col gap-2">
               {devices.map((d) => (
-                <button
-                  key={d.serialNumber || d.uuid}
+                <button key={d.serialNumber || d.uuid}
                   onClick={() => handleConnect(d)}
-                  className="dev-row"
-                >
+                  className="dev-row" >
                   <span
                     className="truncate text-[15px]"
                     style={{ color: "var(--dev-text-light)" }}
