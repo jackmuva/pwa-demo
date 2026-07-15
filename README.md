@@ -42,7 +42,85 @@ npx cap sync ios
 
 2. Copy the `ios/App/App/MainViewController.swift` into your `ios/App/App` directory to register the PlaudPlugin
 
-3. Lastly, in your `capacitor.config.json` file located in `ios/App/App`, make sure you have the server url set to your web app's URL
+After steps 1–2, your `ios/` directory should look like this (★ = files/folders you copied in):
+
+```
+ios/
+├── App/
+│   ├── App/
+│   │   ├── AppDelegate.swift
+│   │   ├── Assets.xcassets/
+│   │   ├── Base.lproj/
+│   │   │   ├── LaunchScreen.storyboard
+│   │   │   └── Main.storyboard          # set MainViewController as the Bridge VC's custom class
+└── PlaudPlugin/                        ★ # local SwiftPM plugin package (the whole folder)
+    ├── Package.swift                     # declares the 3 xcframeworks as binary targets
+    ├── Frameworks/                     ★
+    │   ├── PlaudBleSDK.xcframework
+    │   ├── PlaudDeviceBasicSDK.xcframework
+    │   └── PlaudWiFiSDK.xcframework
+    └── Sources/
+        └── PlaudPlugin/
+            └── PlaudSdkPlugin.swift      # the CAPPlugin bridge (JS ↔ native SDK)
+```
+
+3. Link `PlaudPlugin` into the App target in Xcode. 
+
+Open the project (`npx cap open ios`), then **File → Add Package Dependencies… → Add Local**,
+   select `ios/PlaudPlugin`, and add the `PlaudPlugin` library product to the **App** target
+   (the same way `CapApp-SPM` is already linked).
+
+   While you're there, make sure the App target's **minimum deployment is iOS 15.0 or higher** —
+   the Plaud xcframeworks require it (`Package.swift` declares `.iOS(.v15)`), and the
+   frameworks are arm64 **device-only** builds, so run on a physical iPhone, not the Simulator.
+
+   > Linking the package (this step) is what lets the code compile; registering the plugin
+   > instance in `MainViewController.swift`'s `capacitorDidLoad()` is a separate, runtime step —
+   > you need both.
+
+4. Add the Bluetooth entitlement in `ios/App/App/Info.plist`
+
+```xml
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+  ...
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Uses Bluetooth to connect and interact with peripheral BLE devices.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
+</dict>
+```
+
+5. Lastly, point the native shell at your web app's URL. Set this in the root
+   `capacitor.config.ts` — that's the source of truth. `npx cap sync` regenerates
+   `ios/App/App/capacitor.config.json` from it, so editing the JSON directly gets
+   overwritten on the next sync.
+
+```typescript
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'ai.plaud.pwademo',
+  appName: 'Plaud PWA Demo',
+  // Required by Capacitor even when loading a remote URL; its contents are
+  // ignored at runtime because `server.url` is set below.
+  webDir: 'public',
+  server: {
+    // The native shell loads your deployed site and Capacitor injects the
+    // native bridge, so the plugin can reach iOS CoreBluetooth.
+    url: 'https://pwa-demo-plaud.vercel.app',
+    cleartext: false,
+  },
+};
+
+export default config;
+```
+
+After `npx cap sync`, the generated `ios/App/App/capacitor.config.json` will look like this —
+note `packageClassList`, which sync injects when it detects the installed `bluetooth-le` plugin:
 
 ```json
 {
